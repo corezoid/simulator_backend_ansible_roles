@@ -1,0 +1,6 @@
+---
+# handlers file for system
+- name: restart scylla
+  systemd:
+    name: scylla-server
+    state: restarted

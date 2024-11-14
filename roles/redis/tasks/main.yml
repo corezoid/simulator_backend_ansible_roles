@@ -1,0 +1,67 @@
+---
+- name: Remove Redis OLD repository source file
+  become: yes
+  file:
+    path: /etc/apt/sources.list.d/redis.list
+    state: absent
+
+- name: Remove Redis OLD GPG key
+  become: yes
+  file:
+    path: /usr/share/keyrings/redis-archive-keyring.gpg
+    state: absent
+
+- name: Import Redis GPG key
+  become: true
+  shell: curl -fsSL https://packages.redis.io/gpg | gpg --dearmor -o /usr/share/keyrings/redis-archive-keyring.gpg
+
+- name: Get Ubuntu release codename
+  command: lsb_release -cs
+  register: release
+
+- name: Debug Ubuntu release codename
+  debug:
+    var: release.stdout
+
+- name: Add Redis repository
+  lineinfile:
+    path: /etc/apt/sources.list.d/redis.list
+    line: "deb [signed-by=/usr/share/keyrings/redis-archive-keyring.gpg] https://packages.redis.io/deb {{ release.stdout }} main"
+    create: yes
+
+- name: Update apt cache
+  apt:
+    update_cache: yes
+
+- name: Install specific {{ redis_version }} of redis-server
+  apt:
+    name:
+       - redis-server=6:{{ redis_version }}-1rl1~jammy1
+       - redis-tools=6:{{ redis_version }}-1rl1~jammy1
+    state: present
+
+- name: Add configs for redis
+  template: src=templates/redis.j2 dest=/etc/redis/redis.conf owner=redis group=root mode=0644
+  notify: restart redis
+
+- name: Install Monit
+  apt:
+    name: monit
+    state: present
+
+- name: Configure Monit
+  template: src=templates/monit.conf.j2 dest=/etc/monit/monitrc mode=0600
+  notify: restart monit
+
+- name: Create monit file
+  template: src=templates/{{ item }}.monit.j2 dest=/etc/monit/conf.d/{{ item }}.conf owner=root group=root mode=0600
+  with_items:
+    - redis
+  register: monit_file
+
+- name: Reload monit if config file changed
+  service:
+    name: monit
+    state: reloaded
+  when: monit_file.changed
+

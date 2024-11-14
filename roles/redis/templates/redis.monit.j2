@@ -1,0 +1,6 @@
+check process redis-server with pidfile /run/redis/redis-server.pid
+   group redis
+   start program = "/sbin/service redis-server start" with timeout 15 seconds
+   stop  program = "/sbin/service redis-server stop"
+   if 15 restarts within 15 cycles then timeout
+

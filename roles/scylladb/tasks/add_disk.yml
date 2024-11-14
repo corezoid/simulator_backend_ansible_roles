@@ -1,0 +1,64 @@
+- name: Run fdisk command
+  become: true
+  shell: "sudo  echo -e 'n\np\n1\n\n\nw\n' | fdisk /dev/{{ device_path }}"
+  tags:
+    - create-second-disk
+
+- name: Add file system command
+  become: true
+  command: mkfs.ext4 /dev/{{ device_path }}p1
+  ignore_errors: yes
+  tags:
+    - create-second-disk
+
+- name: Move existing Scylla directory to Scylla2
+  command: mv /var/lib/scylla /var/lib/scylla2
+  args:
+    creates: /var/lib/scylla2
+  tags:
+    - create-second-disk
+
+- name: Create new Scylla directory
+  file:
+    path: /var/lib/scylla
+    state: directory
+    mode: "0755"
+  tags:
+    - create-second-disk
+
+- name: Mount disk
+  become: true
+  command: mount /dev/{{ device_path }}p1 /var/lib/scylla
+  ignore_errors: yes
+  tags:
+    - create-second-disk
+
+- name: Copy contents from Scylla2 to Scylla
+  command: mv /var/lib/scylla2/* /var/lib/scylla/
+  args:
+    creates: /var/lib/scylla
+  tags:
+    - create-second-disk
+
+- name: Change ownership of Scylla directory
+  command: chown -Rf scylla:scylla /var/lib/scylla
+  tags:
+    - create-second-disk
+
+- name: Remove Scylla2 directory
+  command: rm -rf /var/lib/scylla2/
+  tags:
+    - create-second-disk
+
+- name: Get UUID of /dev/{{ device_path }}p1
+  command: blkid -s UUID -o value /dev/{{ device_path }}p1
+  register: blkid_output
+  tags:
+    - create-second-disk
+
+- name: Add mount to /etc/fstab
+  lineinfile:
+    path: /etc/fstab
+    line: "UUID={{ blkid_output.stdout }} /var/lib/scylla ext4 defaults,noatime 0 2"
+  tags:
+    - create-second-disk

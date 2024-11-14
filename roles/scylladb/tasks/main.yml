@@ -1,0 +1,73 @@
+---
+- name: Gather facts
+  ansible.builtin.setup:
+
+- name: Save first IP address to variable
+  set_fact:
+    extracted_ip: "{{ ansible_all_ipv4_addresses | first }}"
+
+- debug:
+    var: extracted_ip
+
+- name: Create keyrings directory
+  command: mkdir -p /etc/apt/keyrings
+
+- name: Import ScyllaDB GPG key
+  shell: gpg --homedir /tmp --no-default-keyring --keyring /etc/apt/keyrings/scylladb.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys d0a112e067426ab2
+  args:
+    executable: /bin/bash
+
+- name: Add ScyllaDB repository
+  shell: wget -O /etc/apt/sources.list.d/scylla.list http://downloads.scylladb.com/deb/debian/scylla-{{ scylla_ver }}.list
+  args:
+    executable: /bin/bash
+
+- name: Update apt cache
+  apt:
+    update_cache: yes
+
+- name: Install ScyllaDB
+  become: true
+  apt:
+    name: scylla
+    state: present
+
+- name: Get Scylla package versions
+  command: apt-cache madison scylla
+  register: scylla_packages
+
+- name: Parse Scylla package version
+  set_fact:
+    scylla_version: "{{ scylla_packages.stdout_lines[0].split(' | ')[1] }}"
+
+- debug:
+    var: scylla_version
+
+- name: Install Scylla with specific version
+  apt:
+    name: "scylla={{ scylla_version }},scylla-server={{ scylla_version }},scylla-jmx={{ scylla_version }},scylla-tools={{ scylla_version }},scylla-tools-core={{ scylla_version }},scylla-kernel-conf={{ scylla_version }},scylla-node-exporter={{ scylla_version }},scylla-conf={{ scylla_version }},scylla-python3={{ scylla_version }}"
+    state: present
+
+- name: Install OpenJDK 11 JRE headless
+  become: true
+  apt:
+    name: openjdk-11-jre-headless
+    state: present
+
+#- name: Set default Java runtime to OpenJDK 11
+#  become: true
+#  command: update-java-alternatives --jre-headless -s java-1.11.0-openjdk
+
+- name: Run scylla_setup command with custom parameters
+  command: scylla_setup --no-raid-setup --online-discard 1 --nic {{ interface }} --io-setup 1 --no-fstrim-setup
+  become: yes
+
+- name: Add config scylla
+  template: src=templates/scylla.yaml.j2 dest=/etc/scylla/scylla.yaml mode=0644
+  notify: restart scylla
+
+- name: Add second disk
+  import_tasks: add_disk.yml
+  when: add_disk == true
+  tags:
+    - create-second-disk

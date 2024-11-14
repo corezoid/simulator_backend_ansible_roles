@@ -1,0 +1,32 @@
+#!/bin/bash
+
+REMOTE_DB_HOST="${1}"
+REMOTE_DB_PORT="{{ master_port }}"
+LOCAL_DB_DIR="/var/lib/postgresql/16/main"
+
+nc -w 2 -zv ${REMOTE_DB_HOST} ${REMOTE_DB_PORT}
+
+RC="$?"
+
+[ "${RC}" -eq 0 ] || { echo "Can't connect to ${REMOTE_DB_HOST} ${REMOTE_DB_PORT}"; exit 1; }
+
+[ -d "${LOCAL_DB_DIR}" ] || { echo "${LOCAL_DB_DIR} doesn't exist"; exit 1; }
+
+su postgres -c "pg_basebackup -r 1024M -X stream -R -P -D ${LOCAL_DB_DIR} -h ${REMOTE_DB_HOST} -p ${REMOTE_DB_PORT} -U postgres"
+
+RC="$?"
+
+if [ "${RC}" -eq 0 ];
+then
+    echo "INFO :: Initial synchronyzation is completed."
+else
+    echo "ERROR :: Something went wrong."
+    exit ${RC}
+fi
+
+sleep 5
+
+chmod -Rf 0700 /postgresqldata/pgsql/16/main
+chown -Rf postgres:postgres /postgresqldata/pgsql
+
+systemctl start postgresql

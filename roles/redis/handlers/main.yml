@@ -1,0 +1,11 @@
+---
+# handlers file for system
+- name: restart redis
+  systemd:
+    name: redis-server
+    state: restarted
+
+- name: restart monit
+  systemd:
+    name: monit
+    state: restarted
