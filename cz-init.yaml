@@ -1,0 +1,10 @@
+- name: Setup backend
+  hosts: all
+  become: true
+  vars_files:
+    - vars/box.yml
+  roles:
+     - system
+     - postgresql #--tags=install-master for master or  --tags=install-replica for replica
+     - redis
+     - scylladb

@@ -1,0 +1,28 @@
+#var for Postgres role
+top_db_dir: "/postgresqldata"
+db_dir: "{{ top_db_dir }}/pgsql"
+default_config_postgresql: true
+db_version: "16"
+replica: true
+master_port: 5432
+master_ip: 10.60.101.129
+replica_ip: 10.60.101.140
+
+#var for Redis role
+redis_version: "7.2.4"
+redis_name: "redis-server"
+redis_port: 6379
+redis_password: "123"
+
+#var for scylladb role
+
+scylla_ver: 5.4
+interface: ens5 #need ip a for server and name interface
+
+cluster_name: Test Cluster
+master_node: 10.60.101.215 #if 1 node comment
+snitch: Ec2Snitch  # SimpleSnitch - for on-prem | Ec2Snitch - for AWS
+
+##only AWS add second hdd for scylladb
+add_disk: false
+device_path: nvme1n1

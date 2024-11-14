@@ -1,0 +1,7 @@
+[all]
+#10.10.10.129 hostname=postgres-master
+10.10.10.22 hostname=scylla-node1
+10.10.10.26 hostname=scylla-node2
+10.10.10.27 hostname=scylla-node3
+[all:vars]
+ansible_ssh_user=ssh_user
