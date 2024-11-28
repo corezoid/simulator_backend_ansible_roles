@@ -12,8 +12,15 @@
 - name: Create keyrings directory
   command: mkdir -p /etc/apt/keyrings
 
-- name: Import ScyllaDB GPG key
+- name: Import ScyllaDB GPG key 5.4
   shell: gpg --homedir /tmp --no-default-keyring --keyring /etc/apt/keyrings/scylladb.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys d0a112e067426ab2
+  when: scylla_ver == 5.4
+  args:
+    executable: /bin/bash
+
+- name: Import ScyllaDB GPG key 6.2
+  shell: sudo gpg --homedir /tmp --no-default-keyring --keyring /etc/apt/keyrings/scylladb.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys a43e06657bac99e3
+  when: scylla_ver == 6.2
   args:
     executable: /bin/bash
 
@@ -43,9 +50,16 @@
 - debug:
     var: scylla_version
 
-- name: Install Scylla with specific version
+- name: Install Scylla with specific version 5.4
+  when: scylla_ver == 5.4
   apt:
     name: "scylla={{ scylla_version }},scylla-server={{ scylla_version }},scylla-jmx={{ scylla_version }},scylla-tools={{ scylla_version }},scylla-tools-core={{ scylla_version }},scylla-kernel-conf={{ scylla_version }},scylla-node-exporter={{ scylla_version }},scylla-conf={{ scylla_version }},scylla-python3={{ scylla_version }}"
+    state: present
+
+- name: Install Scylla with specific version 6.2
+  when: scylla_ver == 6.2
+  apt:
+    name: "scylla={{ scylla_version }},scylla-server={{ scylla_version }},scylla-tools={{ scylla_version }},scylla-tools-core={{ scylla_version }},scylla-kernel-conf={{ scylla_version }},scylla-node-exporter={{ scylla_version }},scylla-conf={{ scylla_version }},scylla-python3={{ scylla_version }}"
     state: present
 
 - name: Install OpenJDK 11 JRE headless
