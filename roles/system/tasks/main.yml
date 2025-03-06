@@ -1,5 +1,5 @@
 ---
-# tasks file for system
+# Displays basic system information: hostname, CPU count, and total memory
 - name: Show CPU count
   ansible.builtin.debug:
     var:
@@ -10,6 +10,7 @@
   - system-all
   - system-info
 
+# Sets the hostname according to the provided variable
 - name: Set hostname
   hostname:
     name: "{{ hostname }}"
@@ -18,6 +19,7 @@
   - system-all
   - system-set-hostname
 
+# Sets the hostname according to the provided variable
 - name: Get hostname
   debug:
     msg: "{{ ansible_hostname }}"
@@ -26,7 +28,7 @@
   - system-all
   - system-set-hostname
 
-
+# Stops the iptables service if iptables_status is set to false
 - name: Stop iptables
   service: name=iptables state=stopped
   when:
@@ -36,6 +38,7 @@
   - system-all
   - system-iptables-action
 
+# Disables iptables autostart at system boot if iptables_status is set to false
 - name: Disbale iptable on boot
   service: name=iptables enabled=no
   when:
@@ -45,6 +48,11 @@
     - system-all
     - system-iptables-action
 
+# Configures optimal kernel parameters for server performance:
+# - Reduces swap usage
+# - Improves TCP connection handling
+# - Increases connection queue sizes
+# - Expands local port range
 - name: change sysctl options
   sysctl: name={{ item.name }} value={{ item.value }} sysctl_set=yes state=present reload=yes
   ignore_errors: true
@@ -59,6 +67,7 @@
     - system-all
     - system-change-sysctl
 
+# Adds an informative command prompt format for root user with time display and color highlighting
 - name: Add custom PS1 to root's .bashrc
   lineinfile:
     path: /root/.bashrc
@@ -66,6 +75,7 @@
     state: present
     insertafter: EOF
 
+# Configures automatic color highlighting for the grep command
 - name: Add GREP_OPTIONS to root's .bashrc
   lineinfile:
     path: /root/.bashrc
@@ -73,6 +83,7 @@
     state: present
     insertafter: EOF
 
+# Sets the highlight color for grep command (purple)
 - name: Add GREP_COLOR to root's .bashrc
   lineinfile:
     path: /root/.bashrc
@@ -80,6 +91,7 @@
     state: present
     insertafter: EOF
 
+# Sets high limits for open files and processes, which is important for high-load servers
 - name: correct system limits
   pam_limits: domain=* limit_type=- limit_item={{ item.name }} value={{ item.value }}
   with_items:
@@ -89,6 +101,7 @@
     - system-all
     - system-change-limits-conf
 
+# Removes the default limits file that might override our settings
 - name: Delete default 90-nproc.conf
   file:
     path: "/etc/security/limits.d/90-nproc.conf"
@@ -97,25 +110,26 @@
     - system-all
     - system-change-limits-conf
 
+# Installs a basic set of utilities and tools for system monitoring and administration
 - name: install base Packages
   apt:
     name:
-    - "mc"
-    - "iotop"
-    - "iftop"
-    - "wget"
-    - "deltarpm"
-    - "lsof"
-    - "screen"
-    - "finger"
-    - "mlocate"
-    - "ncdu"
-    - "netcat"
-    - "mtr"
-    - "tcpdump"
-    - "pigz"
-    - "ngrep"
-    - "net-tools"
+      - "mc"           # Midnight Commander - file manager
+      - "iotop"        # I/O usage monitoring by processes
+      - "iftop"        # Network traffic monitoring
+      - "wget"         # Utility for downloading files
+      - "deltarpm"     # Optimization for RPM package updates
+      - "lsof"         # Information about open files
+      - "screen"       # Terminal session manager
+      - "finger"       # Information about system users
+      - "mlocate"      # Fast file search
+      - "ncdu"         # Disk space usage analyzer
+      - "netcat"       # Network utility for working with TCP/UDP
+      - "mtr"          # Network diagnostic tool
+      - "tcpdump"      # Network traffic analyzer
+      - "pigz"         # Parallel implementation of gzip
+      - "ngrep"        # Network grep for packet monitoring
+      - "net-tools"    # Classic network tools (ifconfig, netstat, etc.)
     # lock_timeout: 360
     state: present
     update_cache: yes
@@ -123,5 +137,3 @@
   tags:
     - system-all
     - system-rpm
-
-
