@@ -1,67 +1,82 @@
 ---
+# Gather system facts for use in subsequent tasks
 - name: Gather facts
   ansible.builtin.setup:
 
+# Extract the first IPv4 address for configuration purposes
 - name: Save first IP address to variable
   set_fact:
     extracted_ip: "{{ ansible_all_ipv4_addresses | first }}"
 
+# Output the extracted IP for verification
 - debug:
     var: extracted_ip
 
+# Create directory for storing APT keyrings if it doesn't exist
 - name: Create keyrings directory
   command: mkdir -p /etc/apt/keyrings
 
+# Import ScyllaDB 5.4 GPG key for package verification
 - name: Import ScyllaDB GPG key 5.4
   shell: gpg --homedir /tmp --no-default-keyring --keyring /etc/apt/keyrings/scylladb.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys d0a112e067426ab2
   when: scylla_ver == 5.4
   args:
     executable: /bin/bash
 
+# Import ScyllaDB 6.2 GPG key for package verification
 - name: Import ScyllaDB GPG key 6.2
   shell: sudo gpg --homedir /tmp --no-default-keyring --keyring /etc/apt/keyrings/scylladb.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys a43e06657bac99e3
   when: scylla_ver == 6.2
   args:
     executable: /bin/bash
 
+# Add the appropriate ScyllaDB repository based on version
 - name: Add ScyllaDB repository
   shell: wget -O /etc/apt/sources.list.d/scylla.list http://downloads.scylladb.com/deb/debian/scylla-{{ scylla_ver }}.list
   args:
     executable: /bin/bash
 
+# Update package cache to include the new repository
 - name: Update apt cache
   apt:
     update_cache: yes
 
+# Install ScyllaDB meta-package
 - name: Install ScyllaDB
   become: true
   apt:
     name: scylla
     state: present
 
+# Get available ScyllaDB package versions for pinning specific version
 - name: Get Scylla package versions
   command: apt-cache madison scylla
   register: scylla_packages
 
+# Extract the latest available version from apt-cache output
 - name: Parse Scylla package version
   set_fact:
     scylla_version: "{{ scylla_packages.stdout_lines[0].split(' | ')[1] }}"
 
+# Output the detected version for verification
 - debug:
     var: scylla_version
 
+# Install all ScyllaDB 5.4 components with the specific version
 - name: Install Scylla with specific version 5.4
   when: scylla_ver == 5.4
   apt:
     name: "scylla={{ scylla_version }},scylla-server={{ scylla_version }},scylla-jmx={{ scylla_version }},scylla-tools={{ scylla_version }},scylla-tools-core={{ scylla_version }},scylla-kernel-conf={{ scylla_version }},scylla-node-exporter={{ scylla_version }},scylla-conf={{ scylla_version }},scylla-python3={{ scylla_version }}"
     state: present
 
+# Install all ScyllaDB 6.2 components with the specific version
 - name: Install Scylla with specific version 6.2
   when: scylla_ver == 6.2
   apt:
     name: "scylla={{ scylla_version }},scylla-server={{ scylla_version }},scylla-tools={{ scylla_version }},scylla-tools-core={{ scylla_version }},scylla-kernel-conf={{ scylla_version }},scylla-node-exporter={{ scylla_version }},scylla-conf={{ scylla_version }},scylla-python3={{ scylla_version }}"
     state: present
 
+# Install Java runtime environment required by ScyllaDB
 - name: Install OpenJDK 11 JRE headless
   become: true
   apt:
@@ -72,14 +87,17 @@
 #  become: true
 #  command: update-java-alternatives --jre-headless -s java-1.11.0-openjdk
 
+# Run ScyllaDB setup utility with custom parameters for system optimization
 - name: Run scylla_setup command with custom parameters
   command: scylla_setup --no-raid-setup --online-discard 1 --nic {{ interface }} --io-setup 1 --no-fstrim-setup
   become: yes
 
+# Apply custom ScyllaDB configuration from template
 - name: Add config scylla
   template: src=templates/scylla.yaml.j2 dest=/etc/scylla/scylla.yaml mode=0644
   notify: restart scylla
 
+# Conditionally configure a second disk for ScyllaDB data storage for AWS
 - name: Add second disk
   import_tasks: add_disk.yml
   when: add_disk == true

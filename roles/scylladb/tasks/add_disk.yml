@@ -1,9 +1,14 @@
+# Create a new primary partition on the additional disk using fdisk
+# The echo command simulates interactive input: new partition (n), primary (p), partition number (1),
+# default first sector, default last sector, and write changes (w)
 - name: Run fdisk command
   become: true
   shell: "sudo  echo -e 'n\np\n1\n\n\nw\n' | fdisk /dev/{{ device_path }}"
   tags:
     - create-second-disk
 
+# Format the newly created partition with ext4 filesystem
+# ignore_errors is used to prevent failure if disk is already formatted
 - name: Add file system command
   become: true
   command: mkfs.ext4 /dev/{{ device_path }}p1
@@ -11,6 +16,8 @@
   tags:
     - create-second-disk
 
+# Backup the existing ScyllaDB data directory by renaming it
+# The creates flag ensures this only happens once to prevent data loss
 - name: Move existing Scylla directory to Scylla2
   command: mv /var/lib/scylla /var/lib/scylla2
   args:
@@ -18,6 +25,7 @@
   tags:
     - create-second-disk
 
+# Recreate the original ScyllaDB data directory for mounting the new disk
 - name: Create new Scylla directory
   file:
     path: /var/lib/scylla
@@ -26,6 +34,8 @@
   tags:
     - create-second-disk
 
+# Mount the new disk partition to the ScyllaDB data directory
+# ignore_errors allows playbook to continue if mount fails (e.g. already mounted)
 - name: Mount disk
   become: true
   command: mount /dev/{{ device_path }}p1 /var/lib/scylla
@@ -33,6 +43,8 @@
   tags:
     - create-second-disk
 
+# Move the original ScyllaDB data from backup directory to the newly mounted disk
+# The creates flag ensures this only runs if source data exists and hasn't been moved yet
 - name: Copy contents from Scylla2 to Scylla
   command: mv /var/lib/scylla2/* /var/lib/scylla/
   args:
@@ -40,22 +52,28 @@
   tags:
     - create-second-disk
 
+# Set correct ownership for all ScyllaDB data files to ensure proper permissions
 - name: Change ownership of Scylla directory
   command: chown -Rf scylla:scylla /var/lib/scylla
   tags:
     - create-second-disk
 
+# Remove the temporary backup directory after data has been successfully migrated
 - name: Remove Scylla2 directory
   command: rm -rf /var/lib/scylla2/
   tags:
     - create-second-disk
 
+# Obtain the UUID of the new partition for consistent mounting even if device name changes
 - name: Get UUID of /dev/{{ device_path }}p1
   command: blkid -s UUID -o value /dev/{{ device_path }}p1
   register: blkid_output
   tags:
     - create-second-disk
 
+# Add an entry to /etc/fstab to ensure the disk is mounted automatically after reboot
+# Uses the UUID rather than device path for reliability
+# noatime option improves performance by preventing access time updates on files
 - name: Add mount to /etc/fstab
   lineinfile:
     path: /etc/fstab
