@@ -1,16 +1,30 @@
 ---
-- name: Add PostgreSQL APT repository
-  lineinfile:
-    path: /etc/apt/sources.list.d/pgdg.list
-    line: 'deb http://apt.postgresql.org/pub/repos/apt {{ ansible_distribution_release }}-pgdg main'
-    create: yes
+# Repository Setup
+# These tasks configure the PostgreSQL repository with compatibility for both
+# Ubuntu 22.04 and 24.04, adapting to the change in APT key handling
+- name: Create APT keyrings directory
+  file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: '0755'
   tags:
     - install-master
     - install-replica
 
-- name: Import PostgreSQL repository signing key
-  apt_key:
-    url: https://www.postgresql.org/media/keys/ACCC4CF8.asc
+- name: Download PostgreSQL repository signing key using curl
+  shell: |
+    curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc -o /etc/apt/keyrings/postgresql-ACCC4CF8.asc
+  args:
+    creates: /etc/apt/keyrings/postgresql-ACCC4CF8.asc
+  tags:
+    - install-master
+    - install-replica
+
+- name: Update PostgreSQL repository source with dearmored key
+  lineinfile:
+    path: /etc/apt/sources.list.d/pgdg.list
+    line: 'deb [signed-by=/etc/apt/keyrings/postgresql-ACCC4CF8.asc] http://apt.postgresql.org/pub/repos/apt {{ ansible_distribution_release }}-pgdg main'
+    create: yes
     state: present
   tags:
     - install-master
@@ -23,6 +37,8 @@
     - install-master
     - install-replica
 
+# Package Installation
+# These tasks install PostgreSQL server, PostGIS extensions, and required dependencies
 - name: Install PostgreSQL {{ db_version }}
   apt:
     name: postgresql-{{ db_version }}
@@ -41,6 +57,8 @@
     - install-master
     - install-replica
 
+# Service Configuration
+# These tasks manage the PostgreSQL service
 - name: enable postgresql to survive reboot
   service: name={{ item }} enabled=yes
   with_items:
@@ -58,24 +76,18 @@
     - install-master
     - install-replica
 
-- name: Creates top directory for postgres
+# Directory Setup
+# These tasks create and configure the necessary directory structure for PostgreSQL data
+- name: Create PostgreSQL directories
   file:
-    path: "{{ top_db_dir }}"
+    path: "{{ item.path }}"
     state: directory
     owner: postgres
     group: postgres
-    mode: 0775
-  tags:
-    - install-master
-    - install-replica
-
-- name: Creates db directory for postgres
-  file:
-    path: "{{ db_dir }}"
-    state: directory
-    owner: postgres
-    group: postgres
-    mode:  755
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ top_db_dir }}", mode: "0775" }
+    - { path: "{{ db_dir }}", mode: "0755" }
   tags:
     - install-master
     - install-replica
@@ -99,6 +111,8 @@
     - install-master
     - install-replica
 
+# System Configuration
+# Adds necessary system configurations for running PostgreSQL
 - name: Allow wheel group to sudo without password in Ubuntu
   become: true
   lineinfile:
@@ -110,6 +124,8 @@
     - install-master
     - install-replica
 
+# Database Initialization
+# Initializes the PostgreSQL database if not already done
 - name: Init DB Ubuntu
   become: true
   command: sudo -u postgres /usr/lib/postgresql/{{ db_version }}/bin/initdb -D {{ db_dir }}/{{ db_version }}/main --locale=en_US.UTF-8
@@ -119,46 +135,32 @@
     - install-master
     - install-replica
 
-- name: Delete default pgsql directory
+# File Structure Management
+# Removes default directories and creates proper symlinks for custom installation
+- name: Remove default PostgreSQL directories
   file:
-    path: "/var/lib/postgresql"
+    path: "{{ item }}"
     state: absent
-  when:
-    - not pgdata_dir_version.stat.exists
+  loop:
+    - "/var/lib/postgresql"
+    - "/etc/postgresql"
+  when: not pgdata_dir_version.stat.exists
   tags:
     - install-master
     - install-replica
 
-- name: Delete default pgsql config directory
+# Create symlinks
+- name: Create PostgreSQL symlinks
   file:
-    path: "/etc/postgresql"
-    state: absent
-  when:
-    - not pgdata_dir_version.stat.exists
-  tags:
-    - install-master
-    - install-replica
-
-- name: Create link to pgsql directory
-  file:
-    src: "{{ db_dir }}"
-    dest: "/var/lib/postgresql"
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
     state: link
     owner: postgres
     group: postgres
     mode: 0700
-  tags:
-    - install-master
-    - install-replica
-
-- name: Create link to pgsql config directory
-  file:
-    src: "{{ db_dir }}"
-    dest: "/etc/postgresql"
-    state: link
-    owner: postgres
-    group: postgres
-    mode: 0700
+  loop:
+    - { src: "{{ db_dir }}", dest: "/var/lib/postgresql" }
+    - { src: "{{ db_dir }}", dest: "/etc/postgresql" }
   tags:
     - install-master
     - install-replica
@@ -173,7 +175,8 @@
     - install-master
     - install-replica
 
-#если будет изменение конфига то сделаем темплейт
+# PostgreSQL Configuration
+# Configures PostgreSQL for general operation
 - name: Add listen_addresses configuration to postgresql.conf
   lineinfile:
     path: /etc/postgresql/{{ db_version }}/main/postgresql.conf
@@ -195,8 +198,8 @@
     - install-master
     - install-replica
 
-##REPLICA config
-
+# Replication Configuration
+# Configures PostgreSQL for replication (master server)
 - name: Add wal_level setting to postgresql.conf
   lineinfile:
     path: /etc/postgresql/{{ db_version }}/main/postgresql.conf
@@ -217,6 +220,8 @@
   tags:
     - install-master
 
+# Replica Setup
+# Configures PostgreSQL for replication (replica server)
 - name: Add max_replication_slots setting to postgresql.conf
   lineinfile:
     path: /etc/postgresql/{{ db_version }}/main/postgresql.conf
