@@ -1,64 +1,94 @@
 ---
-- name: Remove Redis OLD repository source file
+# Cleaning up old repository files and keys to prevent conflicts
+- name: Remove Redis OLD repository files and keys
   become: yes
   file:
-    path: /etc/apt/sources.list.d/redis.list
+    path: "{{ item }}"
     state: absent
+  with_items:
+    - /etc/apt/sources.list.d/redis.list
+    - /usr/share/keyrings/redis-archive-keyring.gpg
 
-- name: Remove Redis OLD GPG key
-  become: yes
-  file:
-    path: /usr/share/keyrings/redis-archive-keyring.gpg
-    state: absent
-
+# Importing the official Redis GPG key to verify package signatures
 - name: Import Redis GPG key
   become: true
   shell: curl -fsSL https://packages.redis.io/gpg | gpg --dearmor -o /usr/share/keyrings/redis-archive-keyring.gpg
 
+# Determining the codename of the current Ubuntu version (jammy, noble, etc.)
 - name: Get Ubuntu release codename
   command: lsb_release -cs
   register: release
 
+# Outputting the determined codename for debugging
 - name: Debug Ubuntu release codename
   debug:
     var: release.stdout
 
+# Setting package suffix for Ubuntu 22.04 (Jammy)
+- name: Set Redis package version suffix based on Ubuntu release
+  ansible.builtin.set_fact:
+    redis_pkg_suffix: "~jammy1"
+    redis_pkg_prefix: "6:"
+  when: release.stdout == "jammy"
+
+# Setting package suffix for Ubuntu 24.04 (Noble)
+- name: Set Redis package version suffix for Ubuntu 24.04 (Noble)
+  ansible.builtin.set_fact:
+    redis_pkg_suffix: "~noble1"
+    redis_pkg_prefix: "6:"
+  when: release.stdout == "noble"
+
+# Adding the official Redis repository using the determined codename
 - name: Add Redis repository
   lineinfile:
     path: /etc/apt/sources.list.d/redis.list
     line: "deb [signed-by=/usr/share/keyrings/redis-archive-keyring.gpg] https://packages.redis.io/deb {{ release.stdout }} main"
     create: yes
 
+# Updating apt cache after adding the new repository
 - name: Update apt cache
   apt:
     update_cache: yes
 
+# Installing the specified Redis version with the appropriate suffix for Ubuntu version
 - name: Install specific {{ redis_version }} of redis-server
   apt:
     name:
-       - redis-server=6:{{ redis_version }}-1rl1~jammy1
-       - redis-tools=6:{{ redis_version }}-1rl1~jammy1
+       - redis-server=6:{{ redis_version }}-1rl1{{ redis_pkg_suffix }}
+       - redis-tools=6:{{ redis_version }}-1rl1{{ redis_pkg_suffix }}
     state: present
 
+# Applying Redis configuration from template with notification handler to restart the service
 - name: Add configs for redis
   template: src=templates/redis.j2 dest=/etc/redis/redis.conf owner=redis group=root mode=0644
   notify: restart redis
 
+# Installing Monit for monitoring and managing the Redis service
 - name: Install Monit
   apt:
     name: monit
     state: present
 
+# Applying the main Monit configuration from template
 - name: Configure Monit
   template: src=templates/monit.conf.j2 dest=/etc/monit/monitrc mode=0600
   notify: restart monit
 
+# Enabling Redis autostart on system boot with systemd daemon reload
+- name: Ensure Redis is enabled on boot
+  ansible.builtin.systemd:
+    name: redis-server
+    enabled: yes
+    daemon_reload: yes
+
+# Creating Monit configuration for Redis monitoring
 - name: Create monit file
   template: src=templates/{{ item }}.monit.j2 dest=/etc/monit/conf.d/{{ item }}.conf owner=root group=root mode=0600
   with_items:
     - redis
   register: monit_file
 
+# Reloading Monit only when configuration files have changed
 - name: Reload monit if config file changed
   service:
     name: monit
