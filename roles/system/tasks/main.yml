@@ -130,6 +130,7 @@
       - "pigz"         # Parallel implementation of gzip
       - "ngrep"        # Network grep for packet monitoring
       - "net-tools"    # Classic network tools (ifconfig, netstat, etc.)
+      - "ntp"
     # lock_timeout: 360
     state: present
     update_cache: yes
