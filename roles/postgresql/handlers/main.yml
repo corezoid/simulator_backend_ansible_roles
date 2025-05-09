@@ -1,6 +1,6 @@
 ---
 # handlers file for system
-- name: restart postgresql
+- name: restart postgresql@{{ db_version }}-main.service
   systemd:
-    name: postgresql
+    name: postgresql@{{ db_version }}-main.service
     state: restarted

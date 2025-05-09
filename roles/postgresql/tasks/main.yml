@@ -59,10 +59,16 @@
 
 # Service Configuration
 # These tasks manage the PostgreSQL service
-- name: enable postgresql to survive reboot
-  service: name={{ item }} enabled=yes
+- name: disable postgresql to survive reboot
+  service: name={{ item }} enabled=no
   with_items:
     - postgresql
+  tags:
+    - install-master
+    - install-replica
+
+- name: enable postgresql@{{ db_version }}-main.service to survive reboot
+  shell: systemctl enable postgresql@{{ db_version }}-main.service
   tags:
     - install-master
     - install-replica
@@ -71,6 +77,15 @@
   become: yes
   systemd:
     name: postgresql
+    state: stopped
+  tags:
+    - install-master
+    - install-replica
+
+- name: Stop postgresql@{{ db_version }}-main.service
+  become: yes
+  systemd:
+    name: postgresql@{{ db_version }}-main.service
     state: stopped
   tags:
     - install-master
@@ -182,7 +197,7 @@
     path: /etc/postgresql/{{ db_version }}/main/postgresql.conf
     line: "listen_addresses = '*'"
     insertafter: '^#*listen_addresses.*$'
-  notify: restart postgresql
+  notify: restart postgresql@{{ db_version }}-main.service
   when: default_config_postgresql == true or replica == true
   tags:
     - install-master
@@ -259,7 +274,7 @@
     state: present
     insertafter: EOF
   when: replica == true
-  notify: restart postgresql
+  notify: restart postgresql@{{ db_version }}-main.service
   tags:
     - install-master
 
