@@ -57,6 +57,14 @@
     - install-master
     - install-replica
 
+- name: Install pgvector for PostgreSQL {{ db_version }}
+  apt:
+    name: postgresql-{{ db_version }}-pgvector
+    state: present
+  tags:
+    - install-master
+    - install-replica
+
 # Service Configuration
 # These tasks manage the PostgreSQL service
 - name: disable postgresql to survive reboot

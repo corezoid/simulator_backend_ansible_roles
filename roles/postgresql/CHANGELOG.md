@@ -28,3 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Ubuntu 24.04 compatibility issues with APT repository signing keys
 - Proper service management for database initialization
 - Correct symlink creation for custom data directories
+
+## [1.0.1] - 2025-08-19
+### Added 
+- pgvector extension 
